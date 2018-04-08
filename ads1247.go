@@ -1,13 +1,14 @@
 package ads1247
 
 import (
+	"encoding/binary"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/kidoman/embd"
+	_ "github.com/kidoman/embd/host/all"
 	"golang.org/x/exp/io/spi"
-	_ github.com/kidoman/embd/host/all
 )
 
 // Power up;Delay for a minimum of 16 ms to allow power supplies to settle and power-on reset to complete;Enable the device by setting the START pin high;Configure the serial interface of the microcontroller to SPI mode 1 (CPOL = 0, CPHA =1);If the CS pin is not tied low permanently, configure the microcontroller GPIO connected to CS as an output;Configure the microcontroller GPIO connected to the DRDY pin as a falling edge triggered interrupt input;Set CS to the device low;Delay for a minimum of tCSSC;Send the RESET command (06h) to make sure the device is properly reset after power up;Delay for a minimum of 0.6 ms;Send SDATAC command (16h) to prevent the new data from interrupting data or register transactions;Write the respective register configuration with the WREG command (40h, 03h, 01h, 00h, 03h and 42h);As an optional sanity check, read back all configuration registers with the RREG command (four bytes from 20h, 03h);Send the SYNC command (04h) to start the ADC conversion;Delay for a minimum of tSCCS;Clear CS to high (resets the serial interface);Loop{ 	Wait for DRDY to transition low;	Take CS low;	Delay for a minimum of tCSSC;	Send the RDATA command (12h);	Send 24 SCLKs to read out conversion data on DOUT/DRDY;	Delay for a minimum of tSCCS;	Clear CS to high;}Take CS low;Delay for a minimum of tCSSC;Send the SLEEP command (02h) to stop conversions and put the device in power-down mode;
@@ -92,7 +93,7 @@ func (ads *ADS1247) WaitForReady(dev *spi.Device) {
 	}
 }
 
-func (ads *ADS1247) Read(dev *spi.Device) {
+func (a *ADS1247) Read() float64 {
 	// //
 	// long A2D = 0x0;
 	//   SPI.beginTransaction(SPISettings(_SPIclock1MHZ, MSBFIRST, SPI_MODE1));
@@ -112,29 +113,32 @@ func (ads *ADS1247) Read(dev *spi.Device) {
 	//   double inV = 1000.0 * _LSB * A2D;
 	//   return inV;
 
-	embd.DigitalWrite(ads._CS_GPIO, embd.Low)
+	embd.DigitalWrite(a._CS_GPIO, embd.Low)
 
 	// ads.reset() ??
-	var result
-	cmd = []byte{NOP,NOP,NOP}
-	output=make([]byte,len(cmd)
-	err = a.adc.Tx(cmd, output)
+
+	cmd := []byte{NOP, NOP, NOP}
+	output := make([]byte, len(cmd))
+	err := a.adc.Tx(cmd, output)
 	if err != nil {
 		log.Println("Error writing to BUS")
 	}
-	data:=append([]byte{0},output)
-	data := binary.BigEndian.Uint32(mySlice)
-    fmt.Println(data) 
+	bytearray := append([]byte{0}, output...)
+	data := binary.BigEndian.Uint32(bytearray)
 
+	fmt.Printf("\n Byte Array = %v ", bytearray)
+	fmt.Printf("\n UInt32 = %d ", data)
+
+	return float64(data)
 
 }
 
 const RESET = 0x06
 const NOP = 0xff
 
-func (a *ADS1247) reset() output {
+func (a *ADS1247) reset() {
 	cmd := []byte{0x06}
-	output:=make([]byte,len(cmd)
+	output := make([]byte, len(cmd))
 	err := a.adc.Tx(cmd, output)
 	if err != nil {
 		log.Println("Unable to Read")
@@ -156,14 +160,14 @@ func (a *ADS1247) configure() {
 	// regbyte := 00001111 // PGA =1, SPS = 2k sps
 	var regbyte byte = 0x0F // max gain, max sps = 0111 1111 = 7F
 	cmd := []byte{0x43, 0x00, regbyte}
-	 output:=make([]byte,len(cmd)
+	output := make([]byte, len(cmd))
 	err := a.adc.Tx(cmd, output)
 	if err != nil {
 		log.Println("Error writing to BUS")
 	}
 	fmt.Printf("\nFound this output %x ", output)
 	cmd = []byte{NOP}
-	output=make([]byte,len(cmd)
+	output = make([]byte, len(cmd))
 	err = a.adc.Tx(cmd, output)
 	if err != nil {
 		log.Println("Error writing to BUS")
