@@ -40,7 +40,7 @@ func (ads *ADS1247) Init(drdyPin, csPin int) error {
 	adc.SetBitOrder(spi.MSBFirst)
 
 	if err != nil {
-		log.Panic("Unable to open SPI Device 0.0")
+		log.Panic("Unable to open SPI Device 0.0", err)
 		return err
 	} else {
 		ads.adc = adc
@@ -94,18 +94,7 @@ func (ads *ADS1247) WaitForReady(dev *spi.Device) {
 }
 
 func (a *ADS1247) Read() float64 {
-	// //
-	// long A2D = 0x0;
-	//   SPI.beginTransaction(SPISettings(_SPIclock1MHZ, MSBFIRST, SPI_MODE1));
-	//   digitalWrite(_CSpin, LOW);
-	//   A2D |= SPI.transfer(0xFF);
-	//   A2D <<= 8;
-	//   A2D |= SPI.transfer(0xFF);
-	//   A2D <<= 8;
-	//   A2D |= SPI.transfer(0xFF);
-	//   SPI.transfer(0xFF);
-	//   digitalWrite(_CSpin, HIGH);
-	//   SPI.endTransaction();
+
 	//   // Convert signs if needed
 	//   if (A2D & 0x800000) {
 	//     A2D |= ~0xFFFFFF;
@@ -123,6 +112,7 @@ func (a *ADS1247) Read() float64 {
 	if err != nil {
 		log.Println("Error writing to BUS")
 	}
+	/// SIGN CHANGE needs to be verified if output[0] is negative
 	bytearray := append([]byte{0}, output...)
 	data := binary.BigEndian.Uint32(bytearray)
 

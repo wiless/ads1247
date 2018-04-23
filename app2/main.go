@@ -32,18 +32,20 @@ var DRDY_PIN, CS_PIN int
 func main() {
 	InitSPI()
 	// sample code to read ADS 1247 analag samples
-	for {
-		read()
-		time.Sleep(100 * time.Millisecond)
-	}
+	// for {
+	// 	read()
+	// 	time.Sleep(100 * time.Millisecond)
+	// }
 
+	reset()
+	RDATAC() // CONTINOUS READ MODE
 }
 
 const NOP = 0xff
 
 func read() float64 {
 
-	// WaitTillDRDY()
+	WaitTillDRDY()
 
 	// ads.reset() ??
 
@@ -68,6 +70,7 @@ func read() float64 {
 func WaitTillDRDY() {
 
 	for {
+		time.Sleep(400 * time.Nanosecond)
 		drdybar, e := embd.DigitalRead(_DRDY_GPIO)
 		if e == nil {
 			if drdybar != 1 {
@@ -77,7 +80,7 @@ func WaitTillDRDY() {
 		} else {
 			log.Println("Error Reading GPIO_", _DRDY_GPIO)
 		}
-		time.Sleep(100 * time.Millisecond)
+
 	}
 
 }
@@ -128,6 +131,51 @@ func reset() {
 	}
 
 	fmt.Printf("\n Received bytes %x ", data[0])
-
 	time.Sleep(100 * time.Microsecond)
+
+	/// start RDATAC
+
+}
+
+// RDATA implements 9.5.3.5 RDATA (0001 001x)
+func RDATA() {
+	data := []uint8{0x12}
+	err := bus.TransferAndReceiveData(data[:])
+	if err != nil {
+		log.Println("Error Reading .. ", err)
+	}
+	fmt.Printf("\n Received %x ", data[:])
+
+	/// SEND NOPS
+
+	data = []uint8{NOP, NOP, NOP}
+	err = bus.TransferAndReceiveData(data[:])
+	if err != nil {
+		log.Println("Error Reading .. ", err)
+	}
+	fmt.Printf("\n Received bytes after RDATA %x ", data[:])
+
+}
+
+// RDATAC Read data continuous mode 0001 010x (14h, 15h)
+func RDATAC() {
+	data := []uint8{0x12}
+	err := bus.TransferAndReceiveData(data[:])
+	if err != nil {
+		log.Println("Error Reading .. ", err)
+	}
+	fmt.Printf("\n Received %x ", data[:])
+
+	/// SEND NOPS
+
+	for {
+		WaitTillDRDY()
+		data = []uint8{NOP, NOP, NOP}
+		err = bus.TransferAndReceiveData(data[:])
+		if err != nil {
+			log.Println("Error Reading .. ", err)
+		}
+		fmt.Printf("\n Received bytes after RDATAC %x ", data[:])
+	}
+
 }
