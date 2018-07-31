@@ -32,7 +32,7 @@ type Sample struct {
 	Voltage   float64
 	Current   float64
 	Value     float64 // unknown adc Value
-	NSamples  int
+	NSamples  int     // If internal average is done
 }
 
 type ADS1247 struct {
@@ -59,6 +59,12 @@ func (ads *ADS1247) Init(drdy, cs int) error {
 	ads.SetDRDY(drdy)
 	ads.onSample = nil
 	return nil
+}
+
+func (a *ADS1247) Close() {
+
+	embd.CloseGPIO() // close all gpio
+
 }
 
 func (a *ADS1247) readBack() {
@@ -153,8 +159,25 @@ func (ads *ADS1247) WaintUntilDRDY() {
 	}
 }
 
-func (ads *ADS1247) WaitForReady(dev *spi.Device) {
-	// Polling medthod
+func (ads *ADS1247) Notify() chan Sample {
+	ch := make(chan Sample) // buffer length
+	var s Sample
+	err := ads.drdyPin.Watch(embd.EdgeFalling, func(btn embd.DigitalPin) {
+		ads.Read()
+
+		s.TimeStamp = time.Now()
+		s.Value = float64(ads.Read())
+		ch <- s
+	})
+	if err != nil {
+		log.Println("Unable to Add Notifier to DRDY PIN ", err)
+	}
+
+	return ch
+}
+
+func (ads *ADS1247) waitForReady(dev *spi.Device) {
+	// Polling method
 	for {
 		drdybar, e := embd.DigitalRead(ads._DRDY_GPIO)
 		if e == nil {
@@ -169,7 +192,8 @@ func (ads *ADS1247) WaitForReady(dev *spi.Device) {
 	}
 }
 
-func (a *ADS1247) Read() float64 {
+// Read()  implements 9.5.3.5 RDATA (0001 001x)
+func (a *ADS1247) Read() int32 {
 	// //
 	// long A2D = 0x0;
 	//   SPI.beginTransaction(SPISettings(_SPIclock1MHZ, MSBFIRST, SPI_MODE1));
@@ -188,39 +212,32 @@ func (a *ADS1247) Read() float64 {
 	//   }
 	//   double inV = 1000.0 * _LSB * A2D;
 	//   return inV;
-
-	embd.DigitalWrite(a._CS_GPIO, embd.Low)
 	cmd := []byte{0x12}
 	output := make([]byte, len(cmd))
 	err := a.adc.Tx(cmd, output)
 	if err != nil {
 		log.Println("Unable to Write Register for REading")
 	}
-	//cmd[0] = 0xff
-
-	//err = a.adc.Tx(cmd, output)
-	time.Sleep(100 * time.Microsecond)
 
 	// ads.reset() ??
 
-	cmd = []byte{NOP, NOP, NOP, NOP, NOP}
+	cmd = []byte{NOP, NOP, NOP, NOP}
 	output = make([]byte, len(cmd))
 	err = a.adc.Tx(cmd, output)
 	if err != nil {
 		log.Println("Error writing to BUS")
 	}
-	bytearray := append([]byte{0}, output...)
-	data := binary.BigEndian.Uint32(bytearray)
-	data2 := binary.BigEndian.Uint32(bytearray[1:5])
-	//data2=data2>>7
-	fmt.Printf("\n %d,%d,%d", bytearray[1:5], data2, data2>>7)
-	//data2:=binary.BigEndian.Unit32(bytearray[1:5])
-	//	fmt.Printf("\n %d",som<<1)
-	fmt.Printf("\n Byte Array = %v ", bytearray)
-	fmt.Printf("\n %x,%x,%x,%x", bytearray[1], bytearray[2], bytearray[3], bytearray[4])
-	fmt.Printf("\n UInt32 = %d ", data)
-
-	return float64(data)
+	byteword := []byte{output[0], output[1], output[2], output[3]}
+	adclevel := binary.BigEndian.Uint32(byteword)
+	// _ = adclevel
+	// return uint16(data[1]&0x03)<<8 | uint16(data[2]), nil
+	//	return float64(adclevel), nil
+	fmt.Printf("\n Received bytes after RDATA  %x %x %x %x", output[0], output[1], output[2], output[3])
+	fmt.Printf("\n Received bytes after RDATA  %d", byteword)
+	fmt.Printf("Before shifting bytes %d", adclevel)
+	fmt.Printf("\nREceived value %d", adclevel>>7)
+	result := adclevel >> 7
+	return int32(result)
 
 }
 
@@ -292,6 +309,6 @@ func (a *ADS1247) ReadSample() Sample {
 	a.WaintUntilDRDY()
 	var result Sample
 	result.TimeStamp = time.Now()
-	result.Value = a.Read()
+	result.Value = float64(a.Read()) // Actual ADC to Voltage/Current to be done here
 	return result
 }
