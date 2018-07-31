@@ -39,11 +39,11 @@ func main() {
 
 	reset()
 	for {
-	RDATA() //  READ DATA ONCE MODE
-	// Read every .25 second
-		time.Sleep(250*time.Millisecond)
+		RDATA() //  READ DATA ONCE MODE
+		// Read every .25 second
+		time.Sleep(250 * time.Millisecond)
 	}
-	
+
 }
 
 const NOP = 0xff
@@ -73,17 +73,51 @@ func read() float64 {
 
 // waits till DRDY pin is not READY "LOW"
 func WaitTillDRDY() {
+	var interrupt = true
 
-	for {
-		time.Sleep(400 * time.Nanosecond)
-		drdybar, e := embd.DigitalRead(_DRDY_GPIO)
-		if e == nil {
-			if drdybar != 1 {
-				// its ready
-				break
+	if interrupt {
+
+		// interrupt
+		drdy, err := embd.NewDigitalPin(_DRDY_GPIO)
+		if err != nil {
+			panic(err)
+		}
+		defer drdy.Close()
+
+		if err = drdy.SetDirection(embd.In); err != nil {
+			panic(err)
+		}
+		drdy.ActiveLow(false)
+
+		done := make(chan bool)
+		err = drdy.Watch(embd.EdgeFalling, func(btn embd.DigitalPin) {
+			done <- true
+		})
+		if err != nil {
+			log.Println("Error setting DRDY Watch ", err)
+		}
+		// This will block the WatchMode till TRIGGERED
+		<-done
+		err = drdy.StopWatching()
+		if err != nil {
+			log.Println("Error setting DRDY Watch ", err)
+		}
+
+	} else {
+
+		/// polling
+		for {
+			time.Sleep(400 * time.Nanosecond)
+			drdybar, e := embd.DigitalRead(_DRDY_GPIO)
+			if e == nil {
+				if drdybar != 1 {
+					// its ready
+					break
+				}
+			} else {
+				log.Println("Error Reading GPIO_", _DRDY_GPIO)
 			}
-		} else {
-			log.Println("Error Reading GPIO_", _DRDY_GPIO)
+
 		}
 
 	}
@@ -158,7 +192,7 @@ func RDATA() {
 	if err != nil {
 		log.Println("Error Reading .. ", err)
 	}
-	fmt.Printf("\n Received bytes after RDATA  %x %x %x", data[2],data[1],data[0])
+	fmt.Printf("\n Received bytes after RDATA  %x %x %x", data[2], data[1], data[0])
 
 }
 
