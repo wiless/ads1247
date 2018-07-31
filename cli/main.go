@@ -23,7 +23,8 @@ func main() {
 	if e != nil {
 		log.Panicln("Unable to Initialize ADC ")
 	}
-
+	adc.Initialize()
 	sample := adc.Read()
+
 	fmt.Println("Sample value is ", sample)
 }
