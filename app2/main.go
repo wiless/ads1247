@@ -38,7 +38,12 @@ func main() {
 	// }
 
 	reset()
-	RDATAC() // CONTINOUS READ MODE
+	for {
+	RDATA() //  READ DATA ONCE MODE
+	// Read every .25 second
+		time.Sleep(250*time.Millisecond)
+	}
+	
 }
 
 const NOP = 0xff
@@ -153,7 +158,7 @@ func RDATA() {
 	if err != nil {
 		log.Println("Error Reading .. ", err)
 	}
-	fmt.Printf("\n Received bytes after RDATA %x ", data[:])
+	fmt.Printf("\n Received bytes after RDATA  %x %x %x", data[2],data[1],data[0])
 
 }
 
