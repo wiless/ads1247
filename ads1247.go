@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/kidoman/embd"
-	_ "github.com/kidoman/embd/host/all"
 	"golang.org/x/exp/io/spi"
 )
 
@@ -29,10 +28,11 @@ func init() {
 
 type Sample struct {
 	TimeStamp time.Time
+	CH        int
 	Voltage   float64
 	Current   float64
 	Value     float64 // unknown adc Value
-	NSamples  int     // If internal average is done
+
 }
 
 type ADS1247 struct {
@@ -43,7 +43,7 @@ type ADS1247 struct {
 	onSample   func() Sample
 }
 
-func (ads *ADS1247) Init(drdy, cs int) error {
+func (a *ADS1247) Init(drdy, cs int) error {
 	devfs := spi.Devfs{Dev: "/dev/spidev0.0", Mode: spi.Mode1, MaxSpeed: 2000000}
 
 	adc, err := spi.Open(&devfs)
@@ -53,11 +53,11 @@ func (ads *ADS1247) Init(drdy, cs int) error {
 		log.Panic("Unable to open SPI Device 0.0")
 		return err
 	} else {
-		ads.adc = adc
+		a.adc = adc
 	}
-	ads.SetCS(cs)
-	ads.SetDRDY(drdy)
-	ads.onSample = nil
+	a.SetCS(cs)
+	a.SetDRDY(drdy)
+	a.onSample = nil
 	return nil
 }
 
@@ -68,9 +68,9 @@ func (a *ADS1247) Close() {
 }
 
 func (a *ADS1247) readBack() {
-	//
+
 	// SYS0 = 0x03
-	// WREG command = 0x40
+
 	// PARM=bytes to be written -1
 	// PGA = 000:1, 100:16 ,111:128 (default 1)
 	// DR Data output sampling rate SPS : (default 5 SPS), 0000:5, 1000:1000sps, >1xxx:2000 sps
@@ -82,111 +82,75 @@ func (a *ADS1247) readBack() {
 	output := make([]byte, len(cmd))
 	err := a.adc.Tx(cmd, output)
 	if err != nil {
-		log.Println("Error writing to BUS")
+		log.Println("Error reading REG ")
 	}
+	fmt.Println("\n SYS0 Response : %08b", output)
 	cmd = []byte{NOP}
 	output = make([]byte, len(cmd))
 	err = a.adc.Tx(cmd, output)
 	if err != nil {
 		log.Println("Error writing to BUS")
 	}
-	fmt.Printf("\n REceived bytes after READBACK %x", output[0])
+	fmt.Printf("\n SYS0 REGISTER output %08b", output[0])
 
 }
 
-func (ads *ADS1247) Initialize() {
-	ads.Reset()
-	time.Sleep(100 * time.Millisecond)
-	ads.readBack()
-	ads.Sdatac()
-	ads.Configure()
-
-	ads.readBack()
-	ads.Sync()
+func (a *ADS1247) Initialize() {
+	a.Reset()
+	a.readBack()    // NOT NEED - Delete after verify
+	a.Sdatac()      // Stop continous reading mode..
+	a.SetChannel(0) // Set to Default channel
+	a.readBack()    //  NOT NEED - Delete after verify
+	a.Sync()        //  //  NOT NEED - Delete after verify
 	time.Sleep(100 * time.Millisecond)
 }
 
 //SetDRDY sets the GPIO pin used to connect to DRDY of ADS1247
-func (ads *ADS1247) SetDRDY(gpiopin int) {
+func (a *ADS1247) SetDRDY(gpiopin int) {
 	// set GPIO mode to input
-	ads._DRDY_GPIO = gpiopin
+	a._DRDY_GPIO = gpiopin
 	var err error
-	ads.drdyPin, err = embd.NewDigitalPin(ads._DRDY_GPIO)
+	a.drdyPin, err = embd.NewDigitalPin(a._DRDY_GPIO)
 	if err != nil {
 		log.Panic("Unable to Open DRDY Pin", err)
 	}
 
-	err = embd.SetDirection(ads._DRDY_GPIO, embd.In)
+	err = embd.SetDirection(a._DRDY_GPIO, embd.In)
 	if err != nil {
 		log.Panic("Unable to Set Direction DRDY ", err)
 	}
 
-	ads.drdyPin.ActiveLow(false)
+	a.drdyPin.ActiveLow(false)
 
 }
 
 //SetCS sets the GPIO pin used to connect to DRDY of ADS1247
-func (ads *ADS1247) SetCS(gpiopin int) {
+func (a *ADS1247) SetCS(gpiopin int) {
 	// set GPIO mode to input
-	ads._CS_GPIO = gpiopin
+	a._CS_GPIO = gpiopin
 
-	err := embd.SetDirection(ads._CS_GPIO, embd.Out)
+	err := embd.SetDirection(a._CS_GPIO, embd.Out)
 	if err != nil {
 		log.Println("Unable to set CS Pin")
 	}
-	err = embd.DigitalWrite(ads._CS_GPIO, embd.Low)
+	err = embd.DigitalWrite(a._CS_GPIO, embd.Low)
 	if err != nil {
 		log.Println("Unable to Enable ADS1247 CS Write Failed")
 	}
 
 }
 
-// Waits for DRDY in blocking mode
-func (ads *ADS1247) WaintUntilDRDY() {
-	done := make(chan bool)
-
-	err := ads.drdyPin.Watch(embd.EdgeFalling, func(btn embd.DigitalPin) {
-		done <- true
-	})
-	if err != nil {
-		log.Println("Error setting DRDY Watch ", err)
-	}
-	// This will block the WatchMode till TRIGGERED
-	<-done
-	err = ads.drdyPin.StopWatching()
-	if err != nil {
-		log.Println("Error setting DRDY Watch ", err)
-	}
-}
-
-func (ads *ADS1247) Notify() chan Sample {
-	ch := make(chan Sample) // buffer length
-	var s Sample
-	err := ads.drdyPin.Watch(embd.EdgeFalling, func(btn embd.DigitalPin) {
-		ads.Read()
-
-		s.TimeStamp = time.Now()
-		s.Value = float64(ads.Read())
-		ch <- s
-	})
-	if err != nil {
-		log.Println("Unable to Add Notifier to DRDY PIN ", err)
-	}
-
-	return ch
-}
-
-func (ads *ADS1247) waitForReady(dev *spi.Device) {
+func (a *ADS1247) waitForReady(dev *spi.Device) {
 	// Polling method
 	for {
-		drdybar, e := embd.DigitalRead(ads._DRDY_GPIO)
+		drdybar, e := embd.DigitalRead(a._DRDY_GPIO)
 		if e == nil {
 			if drdybar != 1 {
 				// its ready
 				break
 			}
 		} else {
-			log.Println("Error Reading GPIO_", ads._DRDY_GPIO)
+			log.Println("Error Reading GPIO_", a._DRDY_GPIO)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -219,7 +183,7 @@ func (a *ADS1247) Read() int32 {
 		log.Println("Unable to Write Register for REading")
 	}
 
-	// ads.reset() ??
+	// a.reset() ??
 
 	cmd = []byte{NOP, NOP, NOP, NOP}
 	output = make([]byte, len(cmd))
@@ -254,7 +218,7 @@ func (a *ADS1247) Reset() {
 	cmd[0] = NOP
 
 	err = a.adc.Tx(cmd, output)
-	time.Sleep(100 * time.Microsecond)
+	time.Sleep(100 * time.Microsecond) /// MAY be dleeted
 }
 
 func (a *ADS1247) Sync() {
@@ -277,6 +241,43 @@ func (a *ADS1247) Sdatac() {
 	}
 }
 
+func (a *ADS1247) SetChannel(nCH int) {
+	var ch0 byte = 0x02 // ADC channel (default input =  00 000 010 -> AIN0(+ve) & AIN1(-ve))
+	var ch1 byte = 0x1a // ADC channel (input =  00 011 010 -> AIN3(+ve) & AIN2(-ve)
+	var MUX0 byte
+	if nCH == 0 {
+		MUX0 = ch0
+	} else {
+		MUX0 = ch1
+	}
+
+	/// 9.5.3.9 WREG (0100 rrrr, 0000 nnnn) (2byte command, START_REG, Nbytes)
+	WREG := make([]byte, 2)
+	WREG[0] = 0x40        // Start Write Registration from offset 0X00 (0100 rr=0000),
+	WREG[1] = 0x03        /// = Write NREGS+1 bytes nnnn=3
+	var VBIAS byte = 0x00 // Set to Chip's default = 0000,VBIAS[3:0]= NO BIAS enabled for AIN0:3
+	var MUX1 byte = 0x00  // Set to Chip's default = 0,VREFCON[1:0],REFSELT[1:0],MUXCAL[2:0]
+	var SYS0 byte = 0x02  // [0, PGA, DR] = 0, 000, 0010
+	// PGA = GAIN 000:1, 100:16 ,111:128 (default 1)
+	// DR Data output sampling rate SPS : (default 5 SPS), 0000:5, 0010:20SPS, 1000:1000sps, >1xxx:2000 sps
+	cmd := []byte{WREG[0], WREG[1], MUX0, VBIAS, MUX1, SYS0}
+	output := make([]byte, len(cmd))
+	err := a.adc.Tx(cmd, output)
+	if err != nil {
+		log.Println("Error writing to BUS")
+	}
+	fmt.Printf("\nFound this output %x ", output)
+	cmd = []byte{NOP}
+	output = make([]byte, len(cmd))
+	err = a.adc.Tx(cmd, output)
+	if err != nil {
+		log.Println("Error writing to BUS")
+	}
+	fmt.Printf("\nFound this output %x ", output)
+	time.Sleep(10 * time.Millisecond)
+
+}
+
 func (a *ADS1247) Configure() {
 	//
 	// SYS0 = 0x03
@@ -287,7 +288,11 @@ func (a *ADS1247) Configure() {
 	// regbyte=[0 PGA DR]
 	// regbyte := 00001111 // PGA =1, SPS = 2k sps
 	//var regbyte byte = 0x0F // max gain, max sps = 0111 1111 = 7F
-	cmd := []byte{0x40, 0x03, 0x02, 0x00, 0x00, 0x02}
+
+	var ch0 byte = 0x02 // ADC channel (default input =  00 000 010 -> AIN0(+ve) & AIN1(-ve))
+	var ch1 byte = 0x1a // ADC channel (input =  00 011 010 -> AIN3(+ve) & AIN2(-ve)
+	_ = ch1
+	cmd := []byte{0x40, 0x03, ch0, 0x00, 0x00, 0x02}
 	output := make([]byte, len(cmd))
 	err := a.adc.Tx(cmd, output)
 	if err != nil {
@@ -306,6 +311,15 @@ func (a *ADS1247) Configure() {
 }
 
 func (a *ADS1247) ReadSample() Sample {
+	a.WaintUntilDRDY()
+	var result Sample
+	result.TimeStamp = time.Now()
+	result.Value = float64(a.Read()) // Actual ADC to Voltage/Current to be done here
+	return result
+}
+
+// ReadSampleCH reads a ADC sample from the given input channel
+func (a *ADS1247) ReadSampleCH(nCH int) Sample {
 	a.WaintUntilDRDY()
 	var result Sample
 	result.TimeStamp = time.Now()
