@@ -320,6 +320,7 @@ func (a *ADS1247) ReadSample() Sample {
 
 // ReadSampleCH reads a ADC sample from the given input channel
 func (a *ADS1247) ReadSampleCH(nCH int) Sample {
+	a.SetChannel(nCH)
 	a.WaintUntilDRDY()
 	var result Sample
 	result.TimeStamp = time.Now()
