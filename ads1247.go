@@ -266,15 +266,16 @@ func (a *ADS1247) SetChannel(nCH int) {
 	if err != nil {
 		log.Println("Error writing to BUS")
 	}
-	fmt.Printf("\nFound this output %x ", output)
+	fmt.Printf("\nDebug SetChannel %d : %x ",nCH, output)
 	cmd = []byte{NOP}
 	output = make([]byte, len(cmd))
 	err = a.adc.Tx(cmd, output)
 	if err != nil {
 		log.Println("Error writing to BUS")
 	}
-	fmt.Printf("\nFound this output %x ", output)
-	time.Sleep(10 * time.Millisecond)
+		fmt.Printf("\nDebug SetChannel %d : %x ",nCH, output)
+
+ 	time.Sleep(10 * time.Millisecond)
 
 }
 
