@@ -42,6 +42,7 @@ func main() {
 
 	fmt.Printf("\n Interval in (s) : ")
 	fmt.Scanf("%d", &interval)
+	log.Println("Starting ... channel : ", ch, " Interval : ", interval, "s")
 
 	if METHOD == 1 {
 		// sample code to read ADS 1247 analag samples
