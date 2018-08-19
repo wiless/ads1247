@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/wiless/ads1247"
 )
@@ -19,6 +20,9 @@ func init() {
 	flag.Parse()
 }
 
+var METHOD = 1
+var interval int = 1
+
 func main() {
 
 	c := make(chan os.Signal, 1)
@@ -31,38 +35,59 @@ func main() {
 		}
 	}()
 
-	// sample code to read ADS 1247 analag samples
-	Method1()
+	var ch int
+
+	fmt.Printf("\n Channel to be Measured : ")
+	fmt.Scanf("%d", &ch)
+
+	fmt.Printf("\n Interval in (s) : ")
+	fmt.Scanf("%d", &interval)
+
+	if METHOD == 1 {
+		// sample code to read ADS 1247 analag samples
+		Method1(ch)
+	} else {
+		Method2(ch)
+	}
 }
 
-func Method1() {
+func Method1(ch int) {
 
 	e := adc.Init(DRDY_PIN, CS_PIN)
 	if e != nil {
 		log.Panicln("Unable to Initialize ADC ")
 	}
 	adc.Initialize()
+	adc.SetChannel(ch)
+	start := time.Now()
 	for {
 		adc.WaintUntilDRDY() /// BLOCKED waiting..
 		sample := adc.ReadSample()
-		fmt.Println("Sample value is ", sample)
-
+		fmt.Printf("\n %v  : %v", time.Since(start), sample)
+		time.Sleep(time.Duration(interval) * time.Second)
 	}
 
 }
 
-func Method2() {
+func Method2(ch int) {
 	// free run mode
 	var adc ads1247.ADS1247
 	e := adc.Init(DRDY_PIN, CS_PIN)
+
 	if e != nil {
 		log.Panicln("Unable to Initialize ADC ")
 	}
 	adc.Initialize()
+	adc.SetChannel(ch)
+
 	sampleCH := adc.Notify() // continuously sample ADC..
+	start := time.Now()
 	for {
 		s := <-sampleCH
-		fmt.Printf("\n %v  : %v", s.TimeStamp, s.Value)
+		// fmt.Printf("\n %v  : %v", s.TimeStamp, s.Value)
+		fmt.Printf("\n %v  : %v", time.Since(start), s.Value)
+
+		time.Sleep(time.Duration(interval) * time.Second)
 	}
 
 }
