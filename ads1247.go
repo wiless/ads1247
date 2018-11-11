@@ -14,7 +14,7 @@ import (
 
 const (
 	channel = 0
-	speed   = 100000
+	speed   = 1000000
 	bpw     = 8
 	delay   = 0
 )
@@ -44,7 +44,7 @@ type ADS1247 struct {
 }
 
 func (a *ADS1247) Init(drdy, cs int) error {
-	devfs := spi.Devfs{Dev: "/dev/spidev0.0", Mode: spi.Mode1, MaxSpeed: 2000000}
+	devfs := spi.Devfs{Dev: "/dev/spidev0.0", Mode: spi.Mode1, MaxSpeed: 1000000}
 
 	adc, err := spi.Open(&devfs)
 	adc.SetBitOrder(spi.MSBFirst)
@@ -97,12 +97,13 @@ func (a *ADS1247) readBack() {
 
 func (a *ADS1247) Initialize() {
 	a.Reset()
-	a.readBack()    // NOT NEED - Delete after verify
+	time.Sleep(10 * time.Millisecond)
+	// a.readBack()    // NOT NEED - Delete after verify
 	a.Sdatac()      // Stop continous reading mode..
 	a.SetChannel(0) // Set to Default channel
-	a.readBack()    //  NOT NEED - Delete after verify
-	a.Sync()        //  //  NOT NEED - Delete after verify
-	time.Sleep(100 * time.Millisecond)
+	// a.readBack()    //  NOT NEED - Delete after verify
+	a.Sync() //  //  NOT NEED - Delete after verify
+	time.Sleep(10 * time.Millisecond)
 }
 
 //SetDRDY sets the GPIO pin used to connect to DRDY of ADS1247
@@ -122,6 +123,26 @@ func (a *ADS1247) SetDRDY(gpiopin int) {
 
 	a.drdyPin.ActiveLow(false)
 
+}
+
+//Sleep puts the ADC to sleep mode
+func (a *ADS1247) Sleep() {
+	cmd := []byte{0x02}
+	output := make([]byte, len(cmd))
+	err := a.adc.Tx(cmd, output)
+	if err != nil {
+		log.Println("Unable to Read")
+	}
+}
+
+//Wake wakes up the ADC from sleep mode by sending a NOP byte
+func (a *ADS1247) Wake() {
+	cmd := []byte{0x00}
+	output := make([]byte, len(cmd))
+	err := a.adc.Tx(cmd, output)
+	if err != nil {
+		log.Println("Unable to Read")
+	}
 }
 
 //SetCS sets the GPIO pin used to connect to DRDY of ADS1247
@@ -184,7 +205,7 @@ func (a *ADS1247) Read() int32 {
 	}
 
 	// a.reset() ??
-
+	time.Sleep(5 * time.Millisecond)
 	cmd = []byte{NOP, NOP, NOP, NOP}
 	output = make([]byte, len(cmd))
 	err = a.adc.Tx(cmd, output)
@@ -312,7 +333,7 @@ func (a *ADS1247) Configure() {
 }
 
 func (a *ADS1247) ReadSample() Sample {
-	a.WaintUntilDRDY()
+	// a.WaintUntilDRDY()
 	var result Sample
 	result.TimeStamp = time.Now()
 	result.Value = float64(a.Read()) // Actual ADC to Voltage/Current to be done here
