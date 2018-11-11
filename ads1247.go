@@ -179,6 +179,10 @@ func (a *ADS1247) waitForReady(dev *spi.Device) {
 
 // Read()  implements 9.5.3.5 RDATA (0001 001x)
 func (a *ADS1247) Read() int32 {
+
+	//@TODO - Set CSPin Low before read if CS_PIN is set..
+	// Else assuming RPI SPI driver takes care of it..
+
 	// //
 	// long A2D = 0x0;
 	//   SPI.beginTransaction(SPISettings(_SPIclock1MHZ, MSBFIRST, SPI_MODE1));
@@ -342,6 +346,7 @@ func (a *ADS1247) ReadSample() Sample {
 
 // ReadSampleCH reads a ADC sample from the given input channel
 func (a *ADS1247) ReadSampleCH(nCH int) Sample {
+
 	a.SetChannel(nCH)
 	a.WaintUntilDRDY()
 	var result Sample
