@@ -6,9 +6,7 @@ import (
 	"log"
 	"time"
 
-	// "github.com/kidoman/embd"
-	"github.com/wiless/gpio"
-	// "github.com/kidoman/embd"
+	"github.com/kidoman/embd"
 	"golang.org/x/exp/io/spi"
 )
 
@@ -41,7 +39,7 @@ type ADS1247 struct {
 	adc        *spi.Device
 	_DRDY_GPIO int
 	_CS_GPIO   int
-	drdyPin    gpio.Pin
+	drdyPin    embd.DigitalPin
 	onSample   func() Sample
 }
 
@@ -64,8 +62,8 @@ func (a *ADS1247) Init(drdy, cs int) error {
 }
 
 func (a *ADS1247) Close() {
-	a.drdyPin.Close()
-	// embd.CloseGPIO() // close all gpio
+
+	embd.CloseGPIO() // close all gpio
 
 }
 
@@ -100,10 +98,10 @@ func (a *ADS1247) readBack() {
 func (a *ADS1247) Initialize() {
 	a.Reset()
 	time.Sleep(10 * time.Millisecond)
-	// a.readBack()    // NOT NEED - Delete after verify
+	//	a.readBack()    // NOT NEED - Delete after verify
 	a.Sdatac()      // Stop continous reading mode..
 	a.SetChannel(0) // Set to Default channel
-	// a.readBack()    //  NOT NEED - Delete after verify
+	//	a.readBack()    //  NOT NEED - Delete after verify
 	a.Sync() //  //  NOT NEED - Delete after verify
 	time.Sleep(10 * time.Millisecond)
 }
@@ -112,40 +110,19 @@ func (a *ADS1247) Initialize() {
 func (a *ADS1247) SetDRDY(gpiopin int) {
 	// set GPIO mode to input
 	a._DRDY_GPIO = gpiopin
-
-	a.drdyPin = gpio.NewInput(uint(a._DRDY_GPIO))
-	// a.drdyPin, err = embd.NewDigitalPin(a._DRDY_GPIO)
-	// if err != nil {
-	// 	log.Panic("Unable to Open DRDY Pin", err)
-	// }
-
-	// err = embd.SetDirection(a._DRDY_GPIO, embd.In)
-	// if err != nil {
-	// 	log.Panic("Unable to Set Direction DRDY ", err)
-	// }
-	a.drdyPin.SetLogicLevel(gpio.ActiveLow)
-	// a.drdyPin.ActiveLow(false)
-
-}
-
-//Sleep puts the ADC to sleep mode
-func (a *ADS1247) Sleep() {
-	cmd := []byte{0x02}
-	output := make([]byte, len(cmd))
-	err := a.adc.Tx(cmd, output)
+	var err error
+	a.drdyPin, err = embd.NewDigitalPin(a._DRDY_GPIO)
 	if err != nil {
-		log.Println("Unable to Read")
+		log.Panic("Unable to Open DRDY Pin", err)
 	}
-}
 
-//Wake wakes up the ADC from sleep mode by sending a NOP byte
-func (a *ADS1247) Wake() {
-	cmd := []byte{0x00}
-	output := make([]byte, len(cmd))
-	err := a.adc.Tx(cmd, output)
+	err = embd.SetDirection(a._DRDY_GPIO, embd.In)
 	if err != nil {
-		log.Println("Unable to Read")
+		log.Panic("Unable to Set Direction DRDY ", err)
 	}
+
+	a.drdyPin.ActiveLow(false)
+
 }
 
 //SetCS sets the GPIO pin used to connect to DRDY of ADS1247
@@ -153,22 +130,21 @@ func (a *ADS1247) SetCS(gpiopin int) {
 	// set GPIO mode to input
 	a._CS_GPIO = gpiopin
 
-	// err := embd.SetDirection(a._CS_GPIO, embd.Out)
-	// if err != nil {
-	// 	log.Println("Unable to set CS Pin")
-	// }
-	// err = embd.DigitalWrite(a._CS_GPIO, embd.Low)
-	// if err != nil {
-	// 	log.Println("Unable to Enable ADS1247 CS Write Failed")
-	// }
+	err := embd.SetDirection(a._CS_GPIO, embd.Out)
+	if err != nil {
+		log.Println("Unable to set CS Pin")
+	}
+	err = embd.DigitalWrite(a._CS_GPIO, embd.Low)
+	if err != nil {
+		log.Println("Unable to Enable ADS1247 CS Write Failed")
+	}
 
 }
 
 func (a *ADS1247) waitForReady(dev *spi.Device) {
 	// Polling method
 	for {
-
-		drdybar, e := a.drdyPin.Read() // embd.DigitalRead(a._DRDY_GPIO)
+		drdybar, e := embd.DigitalRead(a._DRDY_GPIO)
 		if e == nil {
 			if drdybar != 1 {
 				// its ready
@@ -183,10 +159,6 @@ func (a *ADS1247) waitForReady(dev *spi.Device) {
 
 // Read()  implements 9.5.3.5 RDATA (0001 001x)
 func (a *ADS1247) Read() int32 {
-
-	//@TODO - Set CSPin Low before read if CS_PIN is set..
-	// Else assuming RPI SPI driver takes care of it..
-
 	// //
 	// long A2D = 0x0;
 	//   SPI.beginTransaction(SPISettings(_SPIclock1MHZ, MSBFIRST, SPI_MODE1));
@@ -270,6 +242,24 @@ func (a *ADS1247) Sdatac() {
 	}
 }
 
+func (a *ADS1247) Sleep() {
+	cmd := []byte{0x02}
+	output := make([]byte, len(cmd))
+	err := a.adc.Tx(cmd, output)
+	if err != nil {
+		log.Println("Unable to Read")
+	}
+}
+
+func (a *ADS1247) Wake() {
+	cmd := []byte{0x00}
+	output := make([]byte, len(cmd))
+	err := a.adc.Tx(cmd, output)
+	if err != nil {
+		log.Println("Unable to Read")
+	}
+}
+
 func (a *ADS1247) SetChannel(nCH int) {
 	var ch0 byte = 0x02 // ADC channel (default input =  00 000 010 -> AIN0(+ve) & AIN1(-ve))
 	var ch1 byte = 0x1a // ADC channel (input =  00 011 010 -> AIN3(+ve) & AIN2(-ve)
@@ -341,7 +331,7 @@ func (a *ADS1247) Configure() {
 }
 
 func (a *ADS1247) ReadSample() Sample {
-	// a.WaintUntilDRDY()
+	//a.WaintUntilDRDY()
 	var result Sample
 	result.TimeStamp = time.Now()
 	result.Value = float64(a.Read()) // Actual ADC to Voltage/Current to be done here
@@ -350,7 +340,6 @@ func (a *ADS1247) ReadSample() Sample {
 
 // ReadSampleCH reads a ADC sample from the given input channel
 func (a *ADS1247) ReadSampleCH(nCH int) Sample {
-
 	a.SetChannel(nCH)
 	a.WaintUntilDRDY()
 	var result Sample

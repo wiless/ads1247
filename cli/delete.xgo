@@ -1,0 +1,29 @@
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	cmd := []byte{0x23, 0x00}
+	var xx map[int]bool
+	if xx == nil {
+		fmt.Println("Got it")
+	}
+	fmt.Printf("\nHello :  %08b \n", cmd)
+	fmt.Printf("\n Length of map %v", len(xx))
+	xx = make(map[int]bool)
+	if xx == nil {
+		fmt.Println("again it")
+	}
+	fmt.Printf("\n Length of map %v", len(xx))
+	t := time.Now()
+	for i := 0; i < 10; i++ {
+		fmt.Println("%v : %v", i, t)
+		time.Sleep(500 * time.Millisecond)
+
+	}
+	dur := time.Since(t)
+	fmt.Printf("\n Duration %v : \n AFTER %v", dur, t.Add(dur/2))
+}

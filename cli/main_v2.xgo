@@ -17,13 +17,14 @@ var adc ads1247.ADS1247
 
 func init() {
 	flag.IntVar(&DRDY_PIN, "DRDY", 22, "GPIO Pin connected to DRDY")
-	flag.IntVar(&CS_PIN, "CS", 6, "GPIO Pin connected to DRDY")
+	flag.IntVar(&CS_PIN, "CS", 27, "GPIO Pin connected to DRDY")
 	flag.Parse()
 }
 
 var RelayV uint = 17
 var RelayC uint = 18
-var Vpin, Cpin, CSPin gpio.Pin
+var CS uint = 6
+var Vpin, Cpin, Cspin gpio.Pin
 var METHOD = 1
 var interval int = 1
 
@@ -51,12 +52,11 @@ func main() {
 		fmt.Scanf("%d", &interval)
 		log.Println("Starting ... channel : ", ch, " Interval : ", interval, "s")
 	} else {
-		log.Printf("Using GPIO %d for Voltage Relay ", RelayV)
-		log.Printf("Using GPIO %d for Current Relay ", RelayC)
+		log.Println("Using GPIO %d for Voltage Relay ", RelayV)
+		log.Println("Using GPIO %d for Current Relay ", RelayC)
 		Vpin = gpio.NewOutput(RelayV, false)
 		Cpin = gpio.NewOutput(RelayC, false)
-		CSPin = gpio.NewOutput(uint(CS_PIN), false)
-
+		Cspin = gpio.NewOutput(CS,false)
 	}
 
 	switch METHOD {
@@ -65,6 +65,7 @@ func main() {
 	case 2:
 		Method2(ch)
 	case 3:
+		fmt.Println("Choosing Method 3")
 		MeasureVoltageCurrent(0) // type/method  1
 	case 4:
 		MeasureVoltageCurrent(1) // type/method  2
@@ -77,16 +78,20 @@ func main() {
 func MeasureVoltageCurrent(method int) {
 
 	if method == 0 {
+		for {
 		Vpin.High()
-		Vsamples := MeasureNsamples(0, 10)
-		Vpin.Low()
-		time.Sleep(20 * time.Millisecond) /// Sleep before switching the next RELAY
+		//Vsamples := MeasureNsamples(0, 10)
+		//Vpin.Low()
 		Cpin.High()
-		Csamples := MeasureNsamples(1, 100)
+		
+		time.Sleep(20*time.Millisecond)
+		Csamples := MeasureNsamples(0, 100)
 		Cpin.Low()
-		// time.Sleep(5 * time.Millisecond)
-		log.Println(Vsamples)
+		Vpin.Low()
+		time.Sleep(5*time.Second)
+		//log.Println(Vsamples)
 		log.Println(Csamples)
+		}
 
 	}
 
@@ -112,34 +117,32 @@ func MeasureNsamples(ch int, Nsamples int) []float64 {
 	if e != nil {
 		log.Panicln("Unable to Initialize ADC ")
 	}
-	CSPin.Low() // Note CS pin on Pi is Active Low
-	time.Sleep(2 * time.Millisecond)
+	//adc.Wake()
+	Cspin.Low()
+	time.Sleep(2*time.Millisecond)
 	adc.Initialize()
-	CSPin.High() // Note CS pin on Pi is Active Low
-	time.Sleep(2 * time.Millisecond)
+	Cspin.High()
+	time.Sleep(2*time.Millisecond)
 	adc.SetChannel(ch)
 	start := time.Now()
 
 	for i := 0; i < Nsamples; i++ {
 
 		adc.WaintUntilDRDY() /// BLOCKED waiting..
-		CSPin.Low()          // Note CS pin on Pi is Active Low
-		time.Sleep(5 * time.Millisecond)
-
+		Cspin.Low()
+		time.Sleep(5*time.Millisecond)
 		sample := adc.ReadSample()
 		fmt.Printf("\n %v  : %v", time.Since(start), sample)
-		time.Sleep(time.Duration(interval) * time.Second)
-		CSPin.High() // Note CS pin on Pi is Active Low
-
+		time.Sleep(time.Duration(10) * time.Millisecond)
+		Cspin.High()
 		result[i] = sample.Value
 
 	}
-
-	CSPin.Low()
+	Cspin.Low()
 
 	adc.Sleep()
-	time.Sleep(2 * time.Millisecond)
-	CSPin.High()
+	time.Sleep(2*time.Millisecond)
+	Cspin.High()	
 	return result
 }
 
