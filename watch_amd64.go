@@ -28,3 +28,7 @@ func (a *ADS1247) Notify() chan Sample {
 
 	return ch
 }
+
+func (a *ADS1247) closeWatch() {
+	// do nothing dummy here see _arm.go
+}

@@ -6,9 +6,8 @@ import (
 	"log"
 	"time"
 
-	// "github.com/kidoman/embd"
 	"github.com/wiless/gpio"
-	// "github.com/kidoman/embd"
+
 	"golang.org/x/exp/io/spi"
 )
 
@@ -39,8 +38,8 @@ type Sample struct {
 
 type ADS1247 struct {
 	adc        *spi.Device
-	_DRDY_GPIO int
-	_CS_GPIO   int
+	_DRDY_GPIO uint
+	_CS_GPIO   uint
 	drdyPin    gpio.Pin
 	onSample   func() Sample
 }
@@ -57,8 +56,8 @@ func (a *ADS1247) Init(drdy, cs int) error {
 	} else {
 		a.adc = adc
 	}
-	a.SetCS(cs)
-	a.SetDRDY(drdy)
+	a.SetCS(uint(cs))
+	a.SetDRDY(uint(drdy))
 	a.onSample = nil
 	return nil
 }
@@ -66,7 +65,7 @@ func (a *ADS1247) Init(drdy, cs int) error {
 func (a *ADS1247) Close() {
 	a.drdyPin.Close()
 	// embd.CloseGPIO() // close all gpio
-
+	a.closeWatch()
 }
 
 func (a *ADS1247) readBack() {
@@ -109,7 +108,7 @@ func (a *ADS1247) Initialize() {
 }
 
 //SetDRDY sets the GPIO pin used to connect to DRDY of ADS1247
-func (a *ADS1247) SetDRDY(gpiopin int) {
+func (a *ADS1247) SetDRDY(gpiopin uint) {
 	// set GPIO mode to input
 	a._DRDY_GPIO = gpiopin
 
@@ -149,7 +148,7 @@ func (a *ADS1247) Wake() {
 }
 
 //SetCS sets the GPIO pin used to connect to DRDY of ADS1247
-func (a *ADS1247) SetCS(gpiopin int) {
+func (a *ADS1247) SetCS(gpiopin uint) {
 	// set GPIO mode to input
 	a._CS_GPIO = gpiopin
 
